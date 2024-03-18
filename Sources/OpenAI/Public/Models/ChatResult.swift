@@ -146,12 +146,12 @@ extension ChatQuery.ChatCompletionMessageParam.ChatCompletionUserMessageParam.Co
         } catch {}
         do {
             let text = try container.decode(ChatCompletionContentPartTextParam.self)
-            self = .chatCompletionContentPartTextParam(text)
+            self = .contentParts([.text(text)])
             return
         } catch {}
         do {
             let image = try container.decode(ChatCompletionContentPartImageParam.self)
-            self = .chatCompletionContentPartImageParam(image)
+            self = .contentParts([.imageURL(image)])
             return
         } catch {}
         throw DecodingError.typeMismatch(Self.self, .init(codingPath: [Self.CodingKeys.string, CodingKeys.chatCompletionContentPartTextParam, CodingKeys.chatCompletionContentPartImageParam], debugDescription: "Content: expected String, ChatCompletionContentPartTextParam, ChatCompletionContentPartImageParam"))
