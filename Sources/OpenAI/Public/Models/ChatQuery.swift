@@ -175,40 +175,6 @@ public struct ChatQuery: Equatable, Codable, Streamable {
             }
         }}
 
-        public init?(
-            role: Role,
-            content: String? = nil,
-            imageUrl: URL? = nil,
-            name: String? = nil,
-            toolCalls: [Self.ChatCompletionAssistantMessageParam.ChatCompletionMessageToolCallParam]? = nil,
-            toolCallId: String? = nil
-        ) {
-            switch role {
-            case .system:
-                if let content {
-                    self = .system(.init(content: content, name: name))
-                } else {
-                    return nil
-                }
-            case .user:
-                if let content {
-                    self = .user(.init(content: .init(string: content), name: name))
-                } else if let imageUrl {
-                    self = .user(.init(content: .init(chatCompletionContentPartImageParam: .init(imageUrl: .init(url: imageUrl.absoluteString, detail: .auto))), name: name))
-                } else {
-                    return nil
-                }
-            case .assistant:
-                self = .assistant(.init(content: content, name: name, toolCalls: toolCalls))
-            case .tool:
-                if let content, let toolCallId {
-                    self = .tool(.init(content: content, toolCallId: toolCallId))
-                } else {
-                    return nil
-                }
-            }
-        }
-
         private init?(
             content: String,
             role: Role,
@@ -330,8 +296,43 @@ public struct ChatQuery: Equatable, Codable, Streamable {
 
             public enum Content: Codable, Equatable {
                 case string(String)
-                case chatCompletionContentPartTextParam(ChatCompletionContentPartTextParam)
-                case chatCompletionContentPartImageParam(ChatCompletionContentPartImageParam)
+                case contentParts([ContentPart])
+                
+                public enum ContentPart: Codable, Equatable {
+                    case text(ChatCompletionContentPartTextParam)
+                    case imageURL(ChatCompletionContentPartImageParam)
+
+                    private enum CodingKeys: String, CodingKey {
+                        case type
+                    }
+
+                    public init(from decoder: Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        let type = try container.decode(String.self, forKey: .type)
+                        switch type {
+                        case "text":
+                            let textParam = try ChatCompletionContentPartTextParam(from: decoder)
+                            self = .text(textParam)
+                        case "image_url":
+                            let imageParam = try ChatCompletionContentPartImageParam(from: decoder)
+                            self = .imageURL(imageParam)
+                        default:
+                            throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Invalid content part type: \(type)")
+                        }
+                    }
+
+                    public func encode(to encoder: Encoder) throws {
+                        var container = encoder.container(keyedBy: CodingKeys.self)
+                        switch self {
+                        case .text(let textParam):
+                            try container.encode("text", forKey: .type)
+                            try textParam.encode(to: encoder)
+                        case .imageURL(let imageParam):
+                            try container.encode("image_url", forKey: .type)
+                            try imageParam.encode(to: encoder)
+                        }
+                    }
+                }
 
                 public var string: String? { get {
                     switch self {
@@ -342,48 +343,25 @@ public struct ChatQuery: Equatable, Codable, Streamable {
                     }
                 }}
 
-                public var text: String? { get {
-                    switch self {
-                    case .chatCompletionContentPartTextParam(let text):
-                        return text.text
-                    default:
-                        return nil
-                    }
-                }}
-
-                public var imageUrl: Self.ChatCompletionContentPartImageParam.ImageURL? { get {
-                    switch self {
-                    case .chatCompletionContentPartImageParam(let image):
-                        return image.imageUrl
-                    default:
-                        return nil
-                    }
-                }}
 
                 public init(string: String) {
                     self = .string(string)
                 }
 
-                public init(chatCompletionContentPartTextParam: ChatCompletionContentPartTextParam) {
-                    self = .chatCompletionContentPartTextParam(chatCompletionContentPartTextParam)
-                }
-
-                public init(chatCompletionContentPartImageParam: ChatCompletionContentPartImageParam) {
-                    self = .chatCompletionContentPartImageParam(chatCompletionContentPartImageParam)
+                public init(chatCompletionContentParts: [ContentPart]) {
+                    self = .contentParts(chatCompletionContentParts)
                 }
 
                 public func encode(to encoder: Encoder) throws {
                     var container = encoder.singleValueContainer()
                     switch self {
-                    case .string(let a0):
-                        try container.encode(a0)
-                    case .chatCompletionContentPartTextParam(let a0):
-                        try container.encode(a0)
-                    case .chatCompletionContentPartImageParam(let a0):
-                        try container.encode(a0)
+                    case .string(let string):
+                        try container.encode(string)
+                    case .contentParts(let contentParts):
+                        try container.encode(contentParts)
                     }
                 }
-
+                
                 enum CodingKeys: CodingKey {
                     case string
                     case chatCompletionContentPartTextParam
